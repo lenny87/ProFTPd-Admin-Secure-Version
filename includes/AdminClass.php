@@ -19,6 +19,7 @@ if ($cfg['passwd_encryption'] == "pbkdf2") {
 }
 
 include_once "ez_sql_core.php";
+include_once dirname(__FILE__).'/ssh_pubkey.php';
 if (!isset($cfg['db_type']) || $cfg['db_type'] == "mysqli") {
   include_once "ez_sql_mysqli.php";
 } elseif ($cfg['db_type'] == "mysql") {
@@ -194,8 +195,8 @@ class AdminClass {
      * @return boolean true if groupname exists, false if not
      */
     function check_groupname($groupname) {
-        $format = 'SELECT 1 FROM %s WHERE %s="%s"';
-        $query = sprintf($format, $this->config['table_groups'], $this->config['field_groupname'], $groupname);
+        $format = 'SELECT 1 FROM %s WHERE %s=%s';
+        $query = sprintf($format, $this->config['table_groups'], $this->config['field_groupname'], $this->sql_literal($groupname));
         $result = $this->dbConn->get_row($query);
         if (is_object($result)) return true;
         return false;
@@ -207,8 +208,8 @@ class AdminClass {
      * @return boolean true if gid exists, false if not
      */
     function check_gid($gid) {
-        $format = 'SELECT 1 FROM %s WHERE %s="%s"';
-        $query = sprintf($format, $this->config['table_groups'], $this->config['field_gid'], $gid);
+        $format = 'SELECT 1 FROM %s WHERE %s=%s';
+        $query = sprintf($format, $this->config['table_groups'], $this->config['field_gid'], $this->sql_literal($gid));
         $result = $this->dbConn->get_row($query);
         if (is_object($result)) return true;
         return false;
@@ -220,8 +221,8 @@ class AdminClass {
      * @return boolean true if username exists, false if not
      */
     function check_username($userid) {
-        $format = 'SELECT 1 FROM %s WHERE %s="%s"';
-        $query = sprintf($format, $this->config['table_users'], $this->config['field_userid'], $userid);
+        $format = 'SELECT 1 FROM %s WHERE %s=%s';
+        $query = sprintf($format, $this->config['table_users'], $this->config['field_userid'], $this->sql_literal($userid));
         $result = $this->dbConn->get_row($query);
         if (is_object($result)) return true;
         return false;
@@ -233,8 +234,8 @@ class AdminClass {
      * @return boolean true if id exists, false if not
      */
     function check_id($id) {
-        $format = 'SELECT 1 FROM %s WHERE %s="%s"';
-        $query = sprintf($format, $this->config['table_users'], $this->config['field_id'], $id);
+        $format = 'SELECT 1 FROM %s WHERE %s=%s';
+        $query = sprintf($format, $this->config['table_users'], $this->config['field_id'], $this->sql_literal($id));
         $result = $this->dbConn->get_row($query);
         if (is_object($result)) return true;
         return false;
@@ -246,8 +247,8 @@ class AdminClass {
      * @return boolean true if id exists, false if not
      */
     function check_uid($uid) {
-        $format = 'SELECT 1 FROM %s WHERE %s="%s"';
-        $query = sprintf($format, $this->config['table_users'], $this->config['field_uid'], $uid);
+        $format = 'SELECT 1 FROM %s WHERE %s=%s';
+        $query = sprintf($format, $this->config['table_users'], $this->config['field_uid'], $this->sql_literal($uid));
         $result = $this->dbConn->get_row($query);
         if (is_object($result)) return true;
         return false;
@@ -262,16 +263,31 @@ class AdminClass {
         $field_groupname = $this->config['field_groupname'];
         $field_gid       = $this->config['field_gid'];
         $field_members   = $this->config['field_members'];
-        $format = 'INSERT INTO %s (%s,%s,%s) VALUES ("%s","%s","%s")';
+        $format = 'INSERT INTO %s (%s,%s,%s) VALUES (%s,%s,%s)';
         $query = sprintf($format, $this->config['table_groups'],
                                   $field_groupname,
                                   $field_gid,
                                   $field_members,
-                                  $groupdata[$field_groupname],
-                                  $groupdata[$field_gid],
-                                  $groupdata[$field_members]);
+                                  $this->sql_literal($groupdata[$field_groupname]),
+                                  $this->sql_literal($groupdata[$field_gid]),
+                                  $this->sql_literal($groupdata[$field_members]));
         $result = $this->dbConn->query($query);
         return $result;
+    }
+
+    /**
+     * Quote a value for the active database.
+     * SQLite here does not accept double-quoted strings, and its ezSQL
+     * escape() removes the newlines an RFC 4716 key needs.
+     * @param String $value
+     * @return String SQL string literal, including quotes
+     */
+    function sql_literal($value) {
+        $db_type = 'mysqli';
+        if (isset($this->config['db_type']) && $this->config['db_type'] !== '') {
+            $db_type = $this->config['db_type'];
+        }
+        return ssh_pubkey_sql_literal($value, $db_type);
     }
 
     /**
@@ -299,17 +315,17 @@ class AdminClass {
         $passwd = "";
         if ($passwd_encryption == 'pbkdf2') {
           $passwd = hash_pbkdf2("sha1", $userdata[$field_passwd], $userdata[$field_userid], 5000, 40);
-          $passwd = '"'.$passwd.'"';
+          $passwd = $this->sql_literal($passwd);
         } else if ($passwd_encryption == 'crypt') {
           $passwd = unix_crypt($userdata[$field_passwd]);
-          $passwd = '"'.$passwd.'"';
+          $passwd = $this->sql_literal($passwd);
         } else if (strpos($passwd_encryption, "OpenSSL:") === 0) {
           $passwd_digest = substr($passwd_encryption, strpos($passwd_encryption, ':')+1);
           $passwd = 'CONCAT("{'.$passwd_digest.'}",TO_BASE64(UNHEX('.$passwd_digest.'("'.$userdata[$field_passwd].'"))))';
         } else {
           $passwd = $passwd_encryption.'("'.$userdata[$field_passwd].'")';
         }
-        $format = 'INSERT INTO %s (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s) VALUES ("%s","%s","%s",%s,"%s","%s","%s","%s","%s","%s","%s","%s","%s","%s","%s")';
+        $format = 'INSERT INTO %s (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)';
         $query = sprintf($format, $this->config['table_users'],
                                   $field_userid,
                                   $field_uid,
@@ -326,22 +342,22 @@ class AdminClass {
                                   $field_disabled,
                                   $field_last_modified,
                                   $field_expiration,
-                                  $userdata[$field_userid],
-                                  $userdata[$field_uid],
-                                  $userdata[$field_ugid],
+                                  $this->sql_literal($userdata[$field_userid]),
+                                  $this->sql_literal($userdata[$field_uid]),
+                                  $this->sql_literal($userdata[$field_ugid]),
                                   $passwd,
-                                  $userdata[$field_homedir],
-                                  $userdata[$field_shell],
-                                  addslashes($userdata[$field_sshpubkey]),
-                                  $userdata[$field_title],
-                                  $userdata[$field_name],
-                                  $userdata[$field_company],
-                                  $userdata[$field_email],
-                                  $userdata[$field_comment],
-                                  $userdata[$field_disabled],
-                                  date('Y-m-d H:i:s'),
+                                  $this->sql_literal($userdata[$field_homedir]),
+                                  $this->sql_literal($userdata[$field_shell]),
+                                  $this->sql_literal($userdata[$field_sshpubkey]),
+                                  $this->sql_literal($userdata[$field_title]),
+                                  $this->sql_literal($userdata[$field_name]),
+                                  $this->sql_literal($userdata[$field_company]),
+                                  $this->sql_literal($userdata[$field_email]),
+                                  $this->sql_literal($userdata[$field_comment]),
+                                  $this->sql_literal($userdata[$field_disabled]),
+                                  $this->sql_literal(date('Y-m-d H:i:s')),
                                   //$userdata[$expiration]
-				  date("Y-m-d H:i:s", strtotime("+1 month", $time))
+				  $this->sql_literal(date("Y-m-d H:i:s", strtotime("+1 month", $time)))
 				);
         $result = $this->dbConn->query($query);
         return $result;
@@ -354,8 +370,8 @@ class AdminClass {
      */
     function get_group_by_gid($gid) {
         if (empty($gid)) return false;
-        $format = 'SELECT * FROM %s WHERE %s="%s"';
-        $query = sprintf($format, $this->config['table_groups'], $this->config['field_gid'], $gid);
+        $format = 'SELECT * FROM %s WHERE %s=%s';
+        $query = sprintf($format, $this->config['table_groups'], $this->config['field_gid'], $this->sql_literal($gid));
         $result = $this->dbConn->get_row($query, ARRAY_A);
         if (!$result) return false;
         return $result;
@@ -368,8 +384,8 @@ class AdminClass {
      */
     function get_user_by_userid($userid) {
         if (empty($userid)) return false;
-        $format = 'SELECT * FROM %s WHERE %s="%s"';
-        $query = sprintf($format, $this->config['table_users'], $this->config['field_userid'], $userid);
+        $format = 'SELECT * FROM %s WHERE %s=%s';
+        $query = sprintf($format, $this->config['table_users'], $this->config['field_userid'], $this->sql_literal($userid));
         $result = $this->dbConn->get_row($query, ARRAY_A);
         if (!$result) return false;
         return $result;
@@ -382,8 +398,8 @@ class AdminClass {
      */
     function get_user_by_id($id) {
         if (empty($id)) return false;
-        $format = 'SELECT * FROM %s WHERE %s="%s"';
-        $query = sprintf($format, $this->config['table_users'], $this->config['field_id'], $id);
+        $format = 'SELECT * FROM %s WHERE %s=%s';
+        $query = sprintf($format, $this->config['table_users'], $this->config['field_id'], $this->sql_literal($id));
         $result = $this->dbConn->get_row($query, ARRAY_A);
         if (!$result) return false;
         return $result;
@@ -397,8 +413,8 @@ class AdminClass {
      */
     function get_users_by_gid($gid) {
         if (empty($gid)) return false;
-        $format = 'SELECT %s, %s FROM %s WHERE %s="%s"';
-        $query = sprintf($format, $this->config['field_id'], $this->config['field_userid'], $this->config['table_users'], $this->config['field_ugid'], $gid);
+        $format = 'SELECT %s, %s FROM %s WHERE %s=%s';
+        $query = sprintf($format, $this->config['field_id'], $this->config['field_userid'], $this->config['table_users'], $this->config['field_ugid'], $this->sql_literal($gid));
         $result = $this->dbConn->get_results($query);
         if (!$result) return false;
 
@@ -422,8 +438,8 @@ class AdminClass {
      */
     function get_user_count_by_gid($gid) {
         if (empty($gid)) return false;
-        $format = 'SELECT COUNT(*) FROM %s WHERE %s="%s"';
-        $query = sprintf($format, $this->config['table_users'], $this->config['field_ugid'], $gid);
+        $format = 'SELECT COUNT(*) FROM %s WHERE %s=%s';
+        $query = sprintf($format, $this->config['table_users'], $this->config['field_ugid'], $this->sql_literal($gid));
         $result = $this->dbConn->get_var($query);
         if (!$result) return 0;
         return $result;
@@ -487,8 +503,8 @@ class AdminClass {
      */
     function add_user_to_group($userid, $gid) {
         if (empty($userid) || empty($gid)) return false;
-        $format = 'SELECT %s FROM %s WHERE %s="%s"';
-        $query = sprintf($format, $this->config['field_members'], $this->config['table_groups'], $this->config['field_gid'], $gid);
+        $format = 'SELECT %s FROM %s WHERE %s=%s';
+        $query = sprintf($format, $this->config['field_members'], $this->config['table_groups'], $this->config['field_gid'], $this->sql_literal($gid));
         $result = $this->dbConn->get_var($query);
         if ($result != "") {
             if(strpos($result, $userid) !== false) {
@@ -500,8 +516,8 @@ class AdminClass {
             $members = $userid;
         }
 
-        $format = 'UPDATE %s SET %s="%s" WHERE %s="%s"';
-        $query = sprintf($format, $this->config['table_groups'], $this->config['field_members'], $members, $this->config['field_gid'], $gid);
+        $format = 'UPDATE %s SET %s=%s WHERE %s=%s';
+        $query = sprintf($format, $this->config['table_groups'], $this->config['field_members'], $this->sql_literal($members), $this->config['field_gid'], $this->sql_literal($gid));
         $result = $this->dbConn->query($query);
         if (!$result) return false;
         return true;
@@ -515,8 +531,8 @@ class AdminClass {
      */
     function remove_user_from_group($userid, $gid) {
         if (empty($userid) || empty($gid)) return false;
-        $format = 'SELECT %s FROM %s WHERE %s="%s"';
-        $query = sprintf($format, $this->config['field_members'], $this->config['table_groups'], $this->config['field_gid'], $gid);
+        $format = 'SELECT %s FROM %s WHERE %s=%s';
+        $query = sprintf($format, $this->config['field_members'], $this->config['table_groups'], $this->config['field_gid'], $this->sql_literal($gid));
         $result = $this->dbConn->get_var($query);
         if(strpos($result, $userid) === false) {
             return true;
@@ -529,8 +545,8 @@ class AdminClass {
             $members_new = "";
         }
 
-        $format = 'UPDATE %s SET %s="%s" WHERE %s="%s"';
-        $query = sprintf($format, $this->config['table_groups'], $this->config['field_members'], $members_new, $this->config['field_gid'], $gid);
+        $format = 'UPDATE %s SET %s=%s WHERE %s=%s';
+        $query = sprintf($format, $this->config['table_groups'], $this->config['field_members'], $this->sql_literal($members_new), $this->config['field_gid'], $this->sql_literal($gid));
         $result = $this->dbConn->query($query);
         if (!$result) return false;
         return true;
@@ -543,11 +559,11 @@ class AdminClass {
      * @return Boolean true on success, false on failure
      */
     function update_group($gid, $new_gid) {
-        $format = 'UPDATE %s SET %s="%s" WHERE %s="%s"';
-        $query = sprintf($format, $this->config['table_users'], $this->config['field_ugid'], $new_gid, $this->config['field_ugid'], $gid);
+        $format = 'UPDATE %s SET %s=%s WHERE %s=%s';
+        $query = sprintf($format, $this->config['table_users'], $this->config['field_ugid'], $this->sql_literal($new_gid), $this->config['field_ugid'], $this->sql_literal($gid));
         $result = $this->dbConn->query($query);
 
-        $query = sprintf($format, $this->config['table_groups'], $this->config['field_gid'], $new_gid, $this->config['field_gid'], $gid);
+        $query = sprintf($format, $this->config['table_groups'], $this->config['field_gid'], $this->sql_literal($new_gid), $this->config['field_gid'], $this->sql_literal($gid));
         $result = $this->dbConn->query($query);
         return $result;
     }
@@ -558,8 +574,8 @@ class AdminClass {
      * @return Boolean true on success, false on failure
      */
     function delete_group_by_gid($gid) {
-        $format = 'DELETE FROM %s WHERE %s="%s"';
-        $query = sprintf($format, $this->config['table_groups'], $this->config['field_gid'], $gid);
+        $format = 'DELETE FROM %s WHERE %s=%s';
+        $query = sprintf($format, $this->config['table_groups'], $this->config['field_gid'], $this->sql_literal($gid));
         $result = $this->dbConn->query($query);
         return $result;
     }
@@ -593,10 +609,12 @@ class AdminClass {
           $passwd_format = '';
           if ($passwd_encryption == 'pbkdf2') {
             $passwd = hash_pbkdf2("sha1", $userdata[$field_passwd], $userdata[$field_userid], 5000, 40);
-            $passwd_format = ' %s="%s", ';
+            $passwd = $this->sql_literal($passwd);
+            $passwd_format = ' %s=%s, ';
           } else if ($passwd_encryption == 'crypt') {
             $passwd = unix_crypt($userdata[$field_passwd]);
-            $passwd_format = ' %s="%s", ';
+            $passwd = $this->sql_literal($passwd);
+            $passwd_format = ' %s=%s, ';
           } else if (strpos($passwd_encryption, "OpenSSL:") === 0) {
             $passwd_digest = substr($passwd_encryption, strpos($passwd_encryption, ':')+1);
             $passwd = 'CONCAT("{'.$passwd_digest.'}",TO_BASE64(UNHEX('.$passwd_digest.'("'.$userdata[$field_passwd].'"))))';
@@ -608,24 +626,24 @@ class AdminClass {
           $passwd_query = sprintf($passwd_format, $field_passwd, $passwd);
         }
 
-        $format = 'UPDATE %s SET %s %s="%s", %s="%s", %s="%s", %s="%s", %s="%s", %s="%s", %s="%s", %s="%s", %s="%s", %s="%s", %s="%s", %s="%s", %s="%s", %s="%s" WHERE %s="%s"';
+        $format = 'UPDATE %s SET %s %s=%s, %s=%s, %s=%s, %s=%s, %s=%s, %s=%s, %s=%s, %s=%s, %s=%s, %s=%s, %s=%s, %s=%s, %s=%s, %s=%s WHERE %s=%s';
         $query = sprintf($format, $this->config['table_users'],
                                   $passwd_query,
-                                  $field_userid,        $userdata[$field_userid],
-                                  $field_uid,           $userdata[$field_uid],
-                                  $field_ugid,          $userdata[$field_ugid],
-                                  $field_homedir,       $userdata[$field_homedir],
-                                  $field_shell,         $userdata[$field_shell],
-                                  $field_sshpubkey,     addslashes($userdata[$field_sshpubkey]),
-                                  $field_title,         $userdata[$field_title],
-                                  $field_name,          $userdata[$field_name],
-                                  $field_company,       $userdata[$field_company],
-                                  $field_email,         $userdata[$field_email],
-                                  $field_comment,       $userdata[$field_comment],
-                                  $field_disabled,      $userdata[$field_disabled],
-                                  $field_last_modified, date('Y-m-d H:i:s'),
-                                  $field_expiration,    $userdata[$field_expiration],
-                                  $field_id,            $userdata[$field_id]);
+                                  $field_userid,        $this->sql_literal($userdata[$field_userid]),
+                                  $field_uid,           $this->sql_literal($userdata[$field_uid]),
+                                  $field_ugid,          $this->sql_literal($userdata[$field_ugid]),
+                                  $field_homedir,       $this->sql_literal($userdata[$field_homedir]),
+                                  $field_shell,         $this->sql_literal($userdata[$field_shell]),
+                                  $field_sshpubkey,     $this->sql_literal($userdata[$field_sshpubkey]),
+                                  $field_title,         $this->sql_literal($userdata[$field_title]),
+                                  $field_name,          $this->sql_literal($userdata[$field_name]),
+                                  $field_company,       $this->sql_literal($userdata[$field_company]),
+                                  $field_email,         $this->sql_literal($userdata[$field_email]),
+                                  $field_comment,       $this->sql_literal($userdata[$field_comment]),
+                                  $field_disabled,      $this->sql_literal($userdata[$field_disabled]),
+                                  $field_last_modified, $this->sql_literal(date('Y-m-d H:i:s')),
+                                  $field_expiration,    $this->sql_literal($userdata[$field_expiration]),
+                                  $field_id,            $this->sql_literal($userdata[$field_id]));
         $result = $this->dbConn->query($query);
         return $result;
     }
@@ -636,8 +654,8 @@ class AdminClass {
      * @return Boolean true on success, false on failure
      */
     function remove_user_by_id($id) {
-        $format = 'DELETE FROM %s WHERE %s="%s"';
-        $query = sprintf($format, $this->config['table_users'], $this->config['field_id'], $id);
+        $format = 'DELETE FROM %s WHERE %s=%s';
+        $query = sprintf($format, $this->config['table_users'], $this->config['field_id'], $this->sql_literal($id));
         $result = $this->dbConn->query($query);
         return $result;
     }

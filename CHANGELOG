@@ -10,6 +10,15 @@
  */
 
 
+2026-11-13
+----------
+* Optional SSH public keys on Add user and Edit user. OpenSSH public keys
+  are converted to SSH2 (RFC 4716) for ProFTPD mod_sftp. A blank field stores
+  no key. The SQLite users.sshpubkey column is TEXT. Values are single-quoted
+  for SQLite so the key's newlines and quotes survive, including on SQLite
+  builds that reject double-quoted strings. Existing SQLite databases already
+  accept a longer value because SQLite does not enforce VARCHAR length.
+
 2020-01-22
 ----------
 Changes: Alexander Preußner

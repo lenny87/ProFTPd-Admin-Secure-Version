@@ -15,7 +15,7 @@ CREATE TABLE `users` (
   `comment` VARCHAR(255) NOT NULL default '',
   `disabled` UNSIGNED SMALLINT(2) NOT NULL default '0',
   `shell` VARCHAR(32) NOT NULL default '/bin/false',
-  `sshpubkey` VARCHAR(1023) NOT NULL default '',
+  `sshpubkey` TEXT NOT NULL default '',
   `email` VARCHAR(255) NOT NULL default '',
   `name` VARCHAR(255) NOT NULL default '',
   `title` VARCHAR(5) NOT NULL default '',
@@ -26,7 +26,7 @@ CREATE TABLE `users` (
   `files_out_used` UNSIGNED BIGINT(20) NOT NULL default '0',
   `login_count` UNSIGNED INT(11) NOT NULL default '0',
   `last_login` DATETIME NOT NULL default '0000-00-00 00:00:00',
-  `last_modified` DATETIME NOT NULL default '0000-00-00 00:00:00'
+  `last_modified` DATETIME NOT NULL default '0000-00-00 00:00:00',
   `expiration` DATETIME NOT NULL default '0000-00-00 00:00:00'
 );
 CREATE UNIQUE INDEX `userid` ON users (`userid`);

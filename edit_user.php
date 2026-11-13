@@ -42,6 +42,8 @@ $field_bytes_in_used  = $cfg['field_bytes_in_used'];
 $field_bytes_out_used = $cfg['field_bytes_out_used'];
 $field_files_in_used  = $cfg['field_files_in_used'];
 $field_files_out_used = $cfg['field_files_out_used'];
+$ssh_input = isset($_REQUEST[$field_sshpubkey]) ? (string) $_REQUEST[$field_sshpubkey] : '';
+$db_type = isset($cfg['db_type']) ? $cfg['db_type'] : 'mysqli';
 
 if (empty($_REQUEST[$field_id])) {
   header("Location: users.php");
@@ -106,10 +108,11 @@ if (empty($errormsg) && !empty($_REQUEST["action"]) && $_REQUEST["action"] == "u
     array_push($errors, 'Invalid shell; shell cannot be empty.');
   }
 
-//  /* SSH public key validation */
-//  if (strpos($_REQUEST[$field_sshpubkey]) != 0) {
-//    array_push($errors, 'Invalid ssh public key; SSH public key must start with "ssh-".');
-//  }
+  /* SSH public key: optional, stored as RFC 4716 for mod_sftp */
+  $ssh_result = ssh_pubkey_prepare($ssh_input, $db_type);
+  if (!$ssh_result['ok']) {
+    array_push($errors, $ssh_result['error']);
+  }
 
   /* user name uniqueness validation */
   if ($userid != $_REQUEST[$field_userid] && $ac->check_username($_REQUEST[$field_userid])) {
@@ -139,7 +142,7 @@ if (empty($errormsg) && !empty($_REQUEST["action"]) && $_REQUEST["action"] == "u
                       $field_passwd     => $_REQUEST[$field_passwd],
                       $field_homedir    => $_REQUEST[$field_homedir],
                       $field_shell      => $_REQUEST[$field_shell],
-                      $field_sshpubkey  => $_REQUEST[$field_sshpubkey],
+                      $field_sshpubkey  => $ssh_result['value'],
                       $field_title      => $_REQUEST[$field_title],
                       $field_name       => $_REQUEST[$field_name],
                       $field_email      => $_REQUEST[$field_email],
@@ -183,7 +186,7 @@ if (empty($errormsg)) {
   $expiration = $user[$field_expiration];
   $homedir    = $user[$field_homedir];
   $shell      = $user[$field_shell];
-  $sshpubkey  = $user[$field_sshpubkey];
+  $sshpubkey  = ssh_pubkey_for_form(isset($user[$field_sshpubkey]) ? $user[$field_sshpubkey] : '');
   $title      = $user[$field_title];
   $name       = $user[$field_name];
   $email      = $user[$field_email];
@@ -200,7 +203,7 @@ if (empty($errormsg)) {
   $expiration = $_REQUEST[$field_expiration];
   $homedir    = $_REQUEST[$field_homedir];
   $shell      = $_REQUEST[$field_shell];
-  $sshpubkey  = $_REQUEST[$field_sshpubkey];
+  $sshpubkey  = $ssh_input;
   $title      = $_REQUEST[$field_title];
   $name       = $_REQUEST[$field_name];
   $email      = $_REQUEST[$field_email];
@@ -370,8 +373,8 @@ include ("includes/header.php");
           <div class="form-group">
             <label for="<?php echo $field_sshpubkey; ?>" class="col-sm-4 control-label">SSH public key</label>
             <div class="controls col-sm-8">
-              <textarea class="form-control" id="<?php echo $field_sshpubkey; ?>" name="<?php echo $field_sshpubkey; ?>" rows="9" placeholder="<?php echo $placeholder_sshpubkey; ?>"><?php echo $sshpubkey; ?></textarea>
-              <p class="help-block"><small> RFC4716 format </small></p>
+              <textarea class="form-control" id="<?php echo $field_sshpubkey; ?>" name="<?php echo $field_sshpubkey; ?>" rows="9" placeholder="<?php echo htmlspecialchars(ssh_pubkey_form_placeholder(isset($placeholder_sshpubkey) ? $placeholder_sshpubkey : ''), ENT_QUOTES, 'UTF-8'); ?>"><?php echo htmlspecialchars($sshpubkey, ENT_QUOTES, 'UTF-8'); ?></textarea>
+              <p class="help-block"><small>Optional. One OpenSSH public key per line (ssh-ed25519 AAAA... comment). Leave the field blank for password login only. The key is stored in the SSH2 format ProFTPD requires.</small></p>
             </div>
           </div>
           <!-- Title -->

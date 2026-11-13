@@ -11,7 +11,7 @@
  * @copyright Michael Keck <https://github.com/mkkeck>
  */
 
-$placeholder_sshpubkey = "---- BEGIN SSH2 PUBLIC KEY ---- \n Comment: ''foobar'' \n AAAAB3NzaC1..... \n .... \n .... \n .... \n .... \n qU9YwfGHe6ZRXTpV/5XvSX \n ---- END SSH2 PUBLIC KEY ----";
+$placeholder_sshpubkey = "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAI... user@host";
 
 $cfg = array();
 
